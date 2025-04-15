@@ -10,6 +10,7 @@ on:
         description: '手動指定版本（例如 1.2.3）'
         required: true
         default: 'v0.2'
+
 env:
   CGO_CFLAGS: '-O3'
   CGO_CXXFLAGS: '-O3'
@@ -38,13 +39,14 @@ jobs:
           - os: linux
             arch: arm64
             target: archive
-    runs-on: ${{ matrix.arch == 'arm64' && format('{0}-{1}', matrix.os, matrix.arch) || matrix.os }}
+    runs-on: ubuntu-latest  # ✅ 固定為 GitHub 支援的 runner
     environment: release
     needs: setup-environment
     env:
       GOFLAGS: ${{ needs.setup-environment.outputs.GOFLAGS }}
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3  # ✅ 支援多架構 build
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
@@ -101,8 +103,6 @@ jobs:
           images: innodiskorg/ollama
           tags: |
             type=raw,value=innodiskorg/ollama:${{ github.event.inputs.version || github.ref_name }}
-# type=semver,pattern={{version}}
-            
 
       - run: |
           docker buildx imagetools create \
