@@ -1,0 +1,105 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+env:
+  CGO_CFLAGS: '-O3'
+  CGO_CXXFLAGS: '-O3'
+
+jobs:
+  setup-environment:
+    runs-on: ubuntu-latest
+    environment: release
+    outputs:
+      GOFLAGS: ${{ steps.goflags.outputs.GOFLAGS }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set environment
+        id: goflags
+        run: |
+          echo GOFLAGS="'-ldflags=-w -s \"-X=github.com/ChangLijie/ollama_test/version.Version=${GITHUB_REF_NAME#v}\" \"-X=github.com/ChangLijie/ollama_test/server.mode=release\"'" >>$GITHUB_OUTPUT
+
+  linux-build:
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            target: archive
+          - os: linux
+            arch: arm64
+            target: archive
+    runs-on: ${{ matrix.arch == 'arm64' && format('{0}-{1}', matrix.os, matrix.arch) || matrix.os }}
+    environment: release
+    needs: setup-environment
+    env:
+      GOFLAGS: ${{ needs.setup-environment.outputs.GOFLAGS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.os }}/${{ matrix.arch }}
+          target: ${{ matrix.target }}
+          build-args: |
+            GOFLAGS=${{ env.GOFLAGS }}
+            CGO_CFLAGS=${{ env.CGO_CFLAGS }}
+            CGO_CXXFLAGS=${{ env.CGO_CXXFLAGS }}
+          outputs: type=local,dest=dist/${{ matrix.os }}-${{ matrix.arch }}
+          cache-from: type=registry,ref=ollama/ollama:latest
+          cache-to: type=inline
+      - run: |
+          for COMPONENT in bin/* lib/ollama/*; do
+            case "$COMPONENT" in
+              bin/ollama)               echo $COMPONENT >>ollama-${{ matrix.os }}-${{ matrix.arch }}.tar.in ;;
+              lib/ollama/*.so)          echo $COMPONENT >>ollama-${{ matrix.os }}-${{ matrix.arch }}.tar.in ;;
+            esac
+          done
+        working-directory: dist/${{ matrix.os }}-${{ matrix.arch }}
+      - run: |
+          for ARCHIVE in dist/${{ matrix.os }}-${{ matrix.arch }}/*.tar.in; do
+            tar c -C dist/${{ matrix.os }}-${{ matrix.arch }} -T $ARCHIVE --owner 0 --group 0 | pigz -9vc >$(basename ${ARCHIVE//.*/}.tgz);
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.target }}
+          path: |
+            *.tgz
+
+  docker-merge-push:
+    strategy:
+      matrix:
+        suffix: ['']
+    runs-on: ubuntu-latest
+    environment: release
+    needs: linux-build
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-linux-*
+          path: ${{ runner.temp }}
+          merge-multiple: true
+
+      - id: metadata
+        uses: docker/metadata-action@v4
+        with:
+          images: innodiskorg/ollama
+          tags: |
+            type=semver,pattern={{version}}
+
+      - run: |
+          docker buildx imagetools create \
+            $(echo '${{ steps.metadata.outputs.json }}' | jq -cr '.tags | map("-t", .) | join(" ")') \
+            $(find ${{ runner.temp }} -name '*.tgz' | xargs -I {} basename {} .tgz | xargs -I {} echo "type=local,dest=${{ runner.temp }}/{}")
+
+          docker buildx imagetools inspect innodiskorg/ollama:${{ v0.2 }}
+        working-directory: ${{ runner.temp }}
