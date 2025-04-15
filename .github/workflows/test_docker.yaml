@@ -27,7 +27,10 @@ jobs:
       - name: Set environment
         id: goflags
         run: |
-          echo GOFLAGS="'-ldflags=-w -s \"-X=github.com/ChangLijie/ollama_test/version.Version=${{ env.VERSION#v }}\" \"-X=github.com/ChangLijie/ollama_test/server.mode=release\"'" >>$GITHUB_OUTPUT
+          VERSION=${{ env.VERSION }}
+          VERSION_NO_V="${VERSION#v}"
+          echo "GOFLAGS='-ldflags=-w -s \"-X=github.com/ChangLijie/ollama_test/version.Version=${VERSION_NO_V}\" \"-X=github.com/ChangLijie/ollama_test/server.mode=release\"'" >> "$GITHUB_OUTPUT"
+
 
   docker-build-push:
     strategy:
