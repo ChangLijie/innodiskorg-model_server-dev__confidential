@@ -34,6 +34,7 @@ jobs:
 
   docker-build-push:
     strategy:
+      fail-fast: true
       matrix:
         include:
           - os: linux
@@ -83,7 +84,7 @@ jobs:
           platforms: ${{ matrix.os }}/${{ matrix.arch }}
           build-args: ${{ matrix.build-args }}
           outputs: type=image,name=innodiskorg/ollama,push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=innodiskorg/ollama:latest
+          cache-from: type=registry,ref=ollama/ollama:latest
           cache-to: type=inline
 
       - name: Save digest for merging
