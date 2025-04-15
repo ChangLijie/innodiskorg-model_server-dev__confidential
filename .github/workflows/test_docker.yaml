@@ -5,9 +5,15 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: '手動指定版本（例如 1.2.3）'
+        required: true
+        default: 'v0.2'
 env:
   CGO_CFLAGS: '-O3'
   CGO_CXXFLAGS: '-O3'
+  VERSION: ${{ github.event.inputs.version || github.ref_name }}
 
 jobs:
   setup-environment:
@@ -94,12 +100,14 @@ jobs:
         with:
           images: innodiskorg/ollama
           tags: |
-            type=semver,pattern={{version}}
+            type=raw,value=innodiskorg/ollama:${{ github.event.inputs.version || github.ref_name }}
+# type=semver,pattern={{version}}
+            
 
       - run: |
           docker buildx imagetools create \
             $(echo '${{ steps.metadata.outputs.json }}' | jq -cr '.tags | map("-t", .) | join(" ")') \
             $(find ${{ runner.temp }} -name '*.tgz' | xargs -I {} basename {} .tgz | xargs -I {} echo "type=local,dest=${{ runner.temp }}/{}")
 
-          docker buildx imagetools inspect innodiskorg/ollama:${{ v0.2 }}
+          docker buildx imagetools inspect innodiskorg/ollama:${{ steps.metadata.outputs.version }}
         working-directory: ${{ runner.temp }}
