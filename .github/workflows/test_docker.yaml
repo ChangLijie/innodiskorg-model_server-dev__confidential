@@ -18,7 +18,7 @@ env:
 
 jobs:
   setup-environment:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: release
     outputs:
       GOFLAGS: ${{ steps.goflags.outputs.GOFLAGS }}
@@ -60,7 +60,7 @@ jobs:
           #     CGO_CXXFLAGS
           #     GOFLAGS
           #     FLAVOR=rocm
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: release
     needs: setup-environment
     env:
@@ -102,8 +102,8 @@ jobs:
   docker-merge-push:
     strategy:
       matrix:
-        suffix: ['', '-rocm']
-    runs-on: ubuntu-latest
+        suffix: ['']
+    runs-on: self-hosted
     needs: [docker-build-push]
     environment: release
     steps:
