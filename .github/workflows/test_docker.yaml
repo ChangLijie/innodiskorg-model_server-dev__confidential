@@ -35,6 +35,7 @@ jobs:
   docker-build-push:
     strategy:
       fail-fast: true
+      max-parallel: 1
       matrix:
         include:
           - os: linux
@@ -51,14 +52,14 @@ jobs:
               CGO_CFLAGS
               CGO_CXXFLAGS
               GOFLAGS
-          - os: linux
-            arch: amd64
-            suffix: '-rocm'
-            build-args: |
-              CGO_CFLAGS
-              CGO_CXXFLAGS
-              GOFLAGS
-              FLAVOR=rocm
+          # - os: linux
+          #   arch: amd64
+          #   suffix: '-rocm'
+          #   build-args: |
+          #     CGO_CFLAGS
+          #     CGO_CXXFLAGS
+          #     GOFLAGS
+          #     FLAVOR=rocm
     runs-on: ubuntu-latest
     environment: release
     needs: setup-environment
