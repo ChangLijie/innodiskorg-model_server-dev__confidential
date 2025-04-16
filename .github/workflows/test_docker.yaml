@@ -93,7 +93,8 @@ jobs:
           outputs: type=image,name=innodiskorg/ollama,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=ollama/ollama:latest
           cache-to: type=inline
-
+          progress: plain
+          
       - name: Save digest for merging
         run: |
           mkdir -p ${{ matrix.os }}-${{ matrix.arch }}
