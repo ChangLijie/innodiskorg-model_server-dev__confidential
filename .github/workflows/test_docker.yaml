@@ -64,6 +64,7 @@ jobs:
     environment: release
     needs: setup-environment
     env:
+      DOCKER_BUILDKIT: 1 
       GOFLAGS: ${{ needs.setup-environment.outputs.GOFLAGS }}
     steps:
       - uses: actions/checkout@v4
