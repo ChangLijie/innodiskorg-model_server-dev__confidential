@@ -40,6 +40,7 @@ jobs:
         include:
           - os: linux
             arch: amd64
+            runs_on: [self-hosted, X64]
             suffix: ''
             build-args: |
               CGO_CFLAGS
@@ -47,6 +48,7 @@ jobs:
               GOFLAGS
           - os: linux
             arch: arm64
+            runs_on: [self-hosted, ARM64]
             suffix: ''
             build-args: |
               CGO_CFLAGS
@@ -60,7 +62,7 @@ jobs:
           #     CGO_CXXFLAGS
           #     GOFLAGS
           #     FLAVOR=rocm
-    runs-on: self-hosted
+    runs-on: ${{ matrix.runs_on }}
     environment: release
     needs: setup-environment
     env:
@@ -94,7 +96,7 @@ jobs:
           cache-from: type=registry,ref=ollama/ollama:latest
           cache-to: type=inline
           progress: plain
-          
+
       - name: Save digest for merging
         run: |
           mkdir -p ${{ matrix.os }}-${{ matrix.arch }}
