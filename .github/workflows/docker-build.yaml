@@ -23,7 +23,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           VERSION_NO_V="${VERSION#v}"
-          echo "GOFLAGS='-ldflags=-w -s \"-X=github.com/ChangLijie/ollama_test/version.Version=${VERSION_NO_V}\" \"-X=github.com/ChangLijie/ollama_test/server.mode=release\"'" >> "$GITHUB_OUTPUT"
+          echo "GOFLAGS='-ldflags=-w -s \"-X=github.com/ChangLijie/innodiskorg-model_server-dev__confidential/version.Version=${VERSION_NO_V}\" \"-X=github.com/ChangLijie/innodiskorg-model_server-dev__confidential/server.mode=release\"'" >> "$GITHUB_OUTPUT"
       
 
   docker-build-push:
