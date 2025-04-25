@@ -130,13 +130,13 @@ jobs:
             echo "🔁 New patch version: $NEW_VERSION"
 
             # 插入新版本區塊
-            awk -v accelbrain_version="$NEW_VERSION" -v model_server_version="v${{ steps.get_version.outputs.version }}" '
+            awk -v accelbrain_version="$NEW_VERSION" -v model_server_version="v${{ steps.get_version.outputs.version }}" -v date="$(date +'%Y-%m-%d')" '
             BEGIN { inserted=0 }
             {
               print $0
               if (!inserted && $0 ~ /Semantic Versioning/) {
                 print ""
-                print "## [" accelbrain_version "]"
+                print "## [" accelbrain_version "] - " date
                 print ""
                 print "### Fixed"
                 print ""
