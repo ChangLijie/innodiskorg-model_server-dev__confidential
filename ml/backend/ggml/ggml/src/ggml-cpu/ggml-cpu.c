@@ -52,19 +52,6 @@
 #include "llamafile/sgemm.h"
 #endif
 
-#if defined(_MSC_VER)
-// disable "possible loss of data" to avoid hundreds of casts
-// we should just be careful :)
-#pragma warning(disable: 4244 4267)
-
-// disable POSIX deprecation warnings
-// these functions are never going away, anyway
-#pragma warning(disable: 4996)
-
-// unreachable code because of multiple instances of code after GGML_ABORT
-#pragma warning(disable: 4702)
-#endif
-
 // Note: once we move threading into a separate C++ file
 // will use std::hardware_destructive_interference_size instead of hardcoding it here
 // and we'll use C++ attribute syntax.
@@ -373,6 +360,11 @@ static const struct ggml_type_traits_cpu type_traits_cpu[GGML_TYPE_COUNT] = {
         .from_float               = quantize_row_tq2_0,
         .vec_dot                  = ggml_vec_dot_tq2_0_q8_K,
         .vec_dot_type             = GGML_TYPE_Q8_K,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_MXFP4] = {
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_mxfp4,
+        .vec_dot_type             = GGML_TYPE_F32,
         .nrows                    = 1,
     },
 };
@@ -1966,10 +1958,6 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 ggml_compute_forward_pad_reflect_1d(params, tensor);
             } break;
-        case GGML_OP_UNPAD:
-            {
-                ggml_compute_forward_unpad(params, tensor);
-            } break;
         case GGML_OP_ARANGE:
             {
                 ggml_compute_forward_arange(params, tensor);
@@ -2293,7 +2281,6 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_UPSCALE:
         case GGML_OP_PAD:
         case GGML_OP_PAD_REFLECT_1D:
-        case GGML_OP_UNPAD:
         case GGML_OP_ARANGE:
         case GGML_OP_TIMESTEP_EMBEDDING:
         case GGML_OP_ARGSORT:

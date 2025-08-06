@@ -178,9 +178,9 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_CANN
         register_backend(ggml_backend_cann_reg());
 #endif
-// #ifdef GGML_USE_BLAS
-//         register_backend(ggml_backend_blas_reg());
-// #endif
+#ifdef GGML_USE_BLAS
+        register_backend(ggml_backend_blas_reg());
+#endif
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
 #endif
@@ -573,8 +573,16 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
 
     ggml_backend_load_best("blas", silent, dir_path);
     ggml_backend_load_best("cann", silent, dir_path);
-    ggml_backend_load_best("cuda", silent, dir_path);
-    ggml_backend_load_best("hip", silent, dir_path);
+
+    // Avoid mixed hip+cuda configurations
+    const char * hip_devices = std::getenv("HIP_VISIBLE_DEVICES");
+    const char * rocr_devices = std::getenv("ROCR_VISIBLE_DEVICES"); 
+    if (!hip_devices && !rocr_devices) {
+        ggml_backend_load_best("cuda", silent, dir_path);
+    } else {
+        ggml_backend_load_best("hip", silent, dir_path);
+    }
+    
     ggml_backend_load_best("kompute", silent, dir_path);
     ggml_backend_load_best("metal", silent, dir_path);
     ggml_backend_load_best("rpc", silent, dir_path);
