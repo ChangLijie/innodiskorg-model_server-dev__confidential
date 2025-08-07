@@ -1,14 +1,16 @@
-# vim: filetype=dockerfile
+### Updated Dockerfile with Bash shell and templated platform flags
 
-ARG FLAVOR=${TARGETARCH}
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+ARG TARGETARCH
 ARG ROCMVERSION=6.3.3
 ARG JETPACK5VERSION=r35.4.1
 ARG JETPACK6VERSION=r36.4.0
 ARG CMAKEVERSION=3.31.2
+ARG CUDA12VERSION=12.8
 
-# We require gcc v10 minimum.  v10.3 has regressions, so the rockylinux 8.5 AppStream has the latest compatible version
-FROM --platform=linux/amd64 rocm/dev-almalinux-8:${ROCMVERSION}-complete AS base-amd64
+# AMD64 and ARM64 base images, let buildx choose by TARGETARCH
+FROM --platform=linux/${TARGETARCH} rocm/dev-almalinux-8:${ROCMVERSION}-complete AS base-amd64
 RUN yum install -y yum-utils \
     && yum-config-manager --add-repo https://dl.rockylinux.org/vault/rocky/8.5/AppStream/\$basearch/os/ \
     && rpm --import https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-8 \
@@ -17,16 +19,15 @@ RUN yum install -y yum-utils \
     && yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
 ENV PATH=/opt/rh/gcc-toolset-10/root/usr/bin:$PATH
 
-FROM --platform=linux/arm64 almalinux:8 AS base-arm64
-# install epel-release for ccache
+FROM --platform=linux/${TARGETARCH} almalinux:8 AS base-arm64
 RUN yum install -y yum-utils epel-release \
     && dnf install -y clang ccache \
     && yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/sbsa/cuda-rhel8.repo
 ENV CC=clang CXX=clang++
 
 FROM base-${TARGETARCH} AS base
-ARG CMAKEVERSION
-RUN curl -fsSL https://github.com/Kitware/CMake/releases/download/v${CMAKEVERSION}/cmake-${CMAKEVERSION}-linux-$(uname -m).tar.gz | tar xz -C /usr/local --strip-components 1
+RUN curl -fsSL https://github.com/Kitware/CMake/releases/download/v${CMAKEVERSION}/cmake-${CMAKEVERSION}-linux-$(uname -m).tar.gz \
+    | tar xz -C /usr/local --strip-components 1
 COPY CMakeLists.txt CMakePresets.json .
 COPY ml/backend/ggml/ggml ml/backend/ggml/ggml
 ENV LDFLAGS=-s
@@ -36,63 +37,65 @@ RUN dnf install -y gcc-toolset-11-gcc gcc-toolset-11-gcc-c++
 ENV PATH=/opt/rh/gcc-toolset-11/root/usr/bin:$PATH
 RUN --mount=type=cache,target=/root/.ccache \
     cmake --preset 'CPU' \
-        && cmake --build --parallel --preset 'CPU' \
-        && cmake --install build --component CPU --strip --parallel 8
+    && cmake --build --parallel --preset 'CPU' \
+    && cmake --install build --component CPU --strip --parallel 8
 
 FROM base AS cuda-12
-ARG CUDA12VERSION=12.8
+# Use bash substitution to transform version into repo name
 RUN dnf install -y cuda-toolkit-${CUDA12VERSION//./-}
 ENV PATH=/usr/local/cuda-12/bin:$PATH
 RUN --mount=type=cache,target=/root/.ccache \
     cmake --preset 'CUDA 12' \
-        && cmake --build --parallel --preset 'CUDA 12' \
-        && cmake --install build --component CUDA --strip --parallel 8
+    && cmake --build --parallel --preset 'CUDA 12' \
+    && cmake --install build --component CUDA --strip --parallel 8
 
 FROM base AS rocm-6
-ENV PATH=/opt/rocm/hcc/bin:/opt/rocm/hip/bin:/opt/rocm/bin:/opt/rocm/hcc/bin:$PATH
+ENV PATH=/opt/rocm/hcc/bin:/opt/rocm/hip/bin:/opt/rocm/bin:$PATH
 RUN --mount=type=cache,target=/root/.ccache \
     cmake --preset 'ROCm 6' \
-        && cmake --build --parallel --preset 'ROCm 6' \
-        && cmake --install build --component HIP --strip --parallel 8
+    && cmake --build --parallel --preset 'ROCm 6' \
+    && cmake --install build --component HIP --strip --parallel 8
 
 FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-jetpack:${JETPACK5VERSION} AS jetpack-5
-ARG CMAKEVERSION
 RUN apt-get update && apt-get install -y curl ccache \
-    && curl -fsSL https://github.com/Kitware/CMake/releases/download/v${CMAKEVERSION}/cmake-${CMAKEVERSION}-linux-$(uname -m).tar.gz | tar xz -C /usr/local --strip-components 1
+    && curl -fsSL https://github.com/Kitware/CMake/releases/download/v${CMAKEVERSION}/cmake-${CMAKEVERSION}-linux-$(uname -m).tar.gz \
+       | tar xz -C /usr/local --strip-components 1
 COPY CMakeLists.txt CMakePresets.json .
 COPY ml/backend/ggml/ggml ml/backend/ggml/ggml
 RUN --mount=type=cache,target=/root/.ccache \
     cmake --preset 'JetPack 5' \
-        && cmake --build --parallel --preset 'JetPack 5' \
-        && cmake --install build --component CUDA --strip --parallel 8
+    && cmake --build --parallel --preset 'JetPack 5' \
+    && cmake --install build --component CUDA --strip --parallel 8
 
 FROM --platform=linux/arm64 nvcr.io/nvidia/l4t-jetpack:${JETPACK6VERSION} AS jetpack-6
-ARG CMAKEVERSION
 RUN apt-get update && apt-get install -y curl ccache \
-    && curl -fsSL https://github.com/Kitware/CMake/releases/download/v${CMAKEVERSION}/cmake-${CMAKEVERSION}-linux-$(uname -m).tar.gz | tar xz -C /usr/local --strip-components 1
+    && curl -fsSL https://github.com/Kitware/CMake/releases/download/v${CMAKEVERSION}/cmake-${CMAKEVERSION}-linux-$(uname -m).tar.gz \
+       | tar xz -C /usr/local --strip-components 1
 COPY CMakeLists.txt CMakePresets.json .
 COPY ml/backend/ggml/ggml ml/backend/ggml/ggml
 RUN --mount=type=cache,target=/root/.ccache \
     cmake --preset 'JetPack 6' \
-        && cmake --build --parallel --preset 'JetPack 6' \
-        && cmake --install build --component CUDA --strip --parallel 8
+    && cmake --build --parallel --preset 'JetPack 6' \
+    && cmake --install build --component CUDA --strip --parallel 8
 
 FROM base AS build
 WORKDIR /go/src/github.com/ollama/ollama
 COPY go.mod go.sum .
-RUN curl -fsSL https://golang.org/dl/go$(awk '/^go/ { print $2 }' go.mod).linux-$(case $(uname -m) in x86_64) echo amd64 ;; aarch64) echo arm64 ;; esac).tar.gz | tar xz -C /usr/local
+RUN curl -fsSL https://golang.org/dl/go$(awk '/^go/ { print $2 }' go.mod)\.linux-$(case $(uname -m) in x86_64) echo amd64 ;; aarch64) echo arm64 ;; esac).tar.gz \
+    | tar xz -C /usr/local
 ENV PATH=/usr/local/go/bin:$PATH
 RUN go mod download
 COPY . .
-ARG GOFLAGS="'-ldflags=-w -s'"
+ARG GOFLAGS
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -buildmode=pie -o /bin/ollama .
+    go build $GOFLAGS -trimpath -buildmode=pie -o /bin/ollama .
 
-FROM --platform=linux/amd64 scratch AS amd64
+# Scratch images for final artifacts
+FROM scratch AS amd64
 COPY --from=cuda-12 dist/lib/ollama /lib/ollama
 
-FROM --platform=linux/arm64 scratch AS arm64
+FROM scratch AS arm64
 COPY --from=cuda-12 dist/lib/ollama /lib/ollama/cuda_sbsa
 COPY --from=jetpack-5 dist/lib/ollama /lib/ollama/cuda_jetpack5
 COPY --from=jetpack-6 dist/lib/ollama /lib/ollama/cuda_jetpack6
@@ -100,22 +103,18 @@ COPY --from=jetpack-6 dist/lib/ollama /lib/ollama/cuda_jetpack6
 FROM scratch AS rocm
 COPY --from=rocm-6 dist/lib/ollama /lib/ollama
 
-FROM ${FLAVOR} AS archive
-COPY --from=cpu dist/lib/ollama /lib/ollama
-COPY --from=build /bin/ollama /bin/ollama
-
-FROM ubuntu:24.04
+# Final image
+FROM ubuntu:24.04 AS final
 RUN apt-get update \
     && apt-get install -y ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=archive /bin /usr/bin
-ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-COPY --from=archive /lib/ollama /usr/lib/ollama
-ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV OLLAMA_HOST=0.0.0.0:11434
+COPY --from=build /bin/ollama /usr/bin/ollama
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64 \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    NVIDIA_VISIBLE_DEVICES=all \
+    OLLAMA_HOST=0.0.0.0:11434 \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EXPOSE 11434
-ENTRYPOINT ["/bin/ollama"]
+ENTRYPOINT ["/usr/bin/ollama"]
 CMD ["serve"]
